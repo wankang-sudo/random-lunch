@@ -35,12 +35,12 @@ export default function LotteryAnimation({
     return member?.name || '알 수 없음';
   };
 
-  // 컨트롤러: Firebase 업데이트 (상태 변경 시)
+  // 컨트롤러: Firebase 업데이트 (phase와 selectedNumbers만 - currentBall은 너무 빨라서 제외)
   useEffect(() => {
     if (isController && onAnimationUpdate) {
-      onAnimationUpdate(phase, selectedNumbers, currentBall);
+      onAnimationUpdate(phase, selectedNumbers, null);
     }
-  }, [isController, phase, selectedNumbers, currentBall, onAnimationUpdate]);
+  }, [isController, phase, selectedNumbers, onAnimationUpdate]);
 
   // Phase 1: Mixing (2초)
   useEffect(() => {
@@ -100,21 +100,58 @@ export default function LotteryAnimation({
     return () => clearTimeout(timer);
   }, [isController, phase, selectedNumbers, round.drawCount, allNumbers, onComplete]);
 
-  // Phase 2: Selecting - 뷰어 (Firebase 상태를 그대로 표시)
+  // 뷰어: Firebase에서 새 번호가 추가되면 자체 스핀 애니메이션 실행
+  const prevFirebaseNumbersRef = useRef<number[]>([]);
+
   useEffect(() => {
     if (isController) return;
 
     const firebasePhase = round.animationState?.phase;
     const firebaseNumbers = round.animationState?.selectedNumbers || [];
-    const firebaseCurrentBall = round.animationState?.currentBall;
 
-    // Firebase 상태를 그대로 반영
-    if (firebasePhase && firebasePhase !== 'mixing') {
+    // phase 업데이트
+    if (firebasePhase) {
       setPhase(firebasePhase);
     }
-    setSelectedNumbers(firebaseNumbers);
-    setCurrentBall(firebaseCurrentBall ?? null);
-  }, [isController, round.animationState]);
+
+    // 새로 추가된 번호 확인
+    const prevNumbers = prevFirebaseNumbersRef.current;
+    const newNumbers = firebaseNumbers.filter(n => !prevNumbers.includes(n));
+
+    if (newNumbers.length > 0 && firebasePhase === 'selecting') {
+      // 새 번호에 대해 스핀 애니메이션 실행
+      const newNumber = newNumbers[newNumbers.length - 1];
+      const remainingNumbers = allNumbers.filter(n => !prevNumbers.includes(n));
+
+      setIsSpinning(true);
+      let spinCount = 0;
+      const maxSpins = 12;
+
+      const spinInterval = setInterval(() => {
+        if (spinCount >= maxSpins) {
+          clearInterval(spinInterval);
+          setCurrentBall(newNumber);
+          setIsSpinning(false);
+
+          setTimeout(() => {
+            setSelectedNumbers(firebaseNumbers);
+            setCurrentBall(null);
+          }, 800);
+          return;
+        }
+
+        const randomIdx = Math.floor(Math.random() * remainingNumbers.length);
+        setCurrentBall(remainingNumbers[randomIdx] || newNumber);
+        spinCount++;
+      }, 60);
+    } else if (firebasePhase === 'revealing' || firebasePhase === 'complete') {
+      // 완료 단계에서는 바로 반영
+      setSelectedNumbers(firebaseNumbers);
+      setCurrentBall(null);
+    }
+
+    prevFirebaseNumbersRef.current = firebaseNumbers;
+  }, [isController, round.animationState?.phase, round.animationState?.selectedNumbers, allNumbers]);
 
   // 뷰어: complete 상태가 되면 onComplete 호출
   useEffect(() => {
