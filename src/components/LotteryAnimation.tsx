@@ -26,7 +26,6 @@ export default function LotteryAnimation({
   const [isSpinning, setIsSpinning] = useState(false);
 
   const completedRef = useRef(false);
-  const lastSyncedCountRef = useRef(0);
 
   const selections = round.numberSelections || {};
   const allNumbers = useMemo(() => Object.keys(selections).map(Number), [selections]);
@@ -36,12 +35,12 @@ export default function LotteryAnimation({
     return member?.name || '알 수 없음';
   };
 
-  // 컨트롤러: Firebase 업데이트 (phase와 selectedNumbers 변경 시)
+  // 컨트롤러: Firebase 업데이트 (상태 변경 시)
   useEffect(() => {
     if (isController && onAnimationUpdate) {
       onAnimationUpdate(phase, selectedNumbers, currentBall);
     }
-  }, [isController, phase, selectedNumbers, onAnimationUpdate]);
+  }, [isController, phase, selectedNumbers, currentBall, onAnimationUpdate]);
 
   // Phase 1: Mixing (2초)
   useEffect(() => {
@@ -101,74 +100,33 @@ export default function LotteryAnimation({
     return () => clearTimeout(timer);
   }, [isController, phase, selectedNumbers, round.drawCount, allNumbers, onComplete]);
 
-  // Phase 2: Selecting - 뷰어 (Firebase 상태를 따라감)
-  useEffect(() => {
-    if (isController) return;
-    if (phase !== 'selecting') return;
-
-    const firebaseNumbers = round.animationState?.selectedNumbers || [];
-
-    // 새로운 번호가 Firebase에 추가되었는지 확인
-    if (firebaseNumbers.length > lastSyncedCountRef.current) {
-      const newNumbers = firebaseNumbers.slice(lastSyncedCountRef.current);
-
-      // 새 번호들을 순차적으로 애니메이션
-      newNumbers.forEach((num, idx) => {
-        setTimeout(() => {
-          // 스핀 애니메이션
-          setIsSpinning(true);
-          const remainingNumbers = allNumbers.filter((n) => !selectedNumbers.includes(n) && !firebaseNumbers.slice(0, lastSyncedCountRef.current + idx).includes(n));
-
-          let spinCount = 0;
-          const spinInterval = setInterval(() => {
-            if (spinCount >= 10) {
-              clearInterval(spinInterval);
-              setCurrentBall(num);
-              setIsSpinning(false);
-
-              setTimeout(() => {
-                setSelectedNumbers((prev) => {
-                  if (!prev.includes(num)) {
-                    return [...prev, num];
-                  }
-                  return prev;
-                });
-                setCurrentBall(null);
-              }, 800);
-              return;
-            }
-
-            const randomIdx = Math.floor(Math.random() * remainingNumbers.length);
-            setCurrentBall(remainingNumbers[randomIdx] || num);
-            spinCount++;
-          }, 80);
-        }, idx * 2500); // 각 번호 사이에 2.5초 간격
-      });
-
-      lastSyncedCountRef.current = firebaseNumbers.length;
-    }
-  }, [isController, phase, round.animationState?.selectedNumbers, allNumbers, selectedNumbers]);
-
-  // 뷰어: Firebase phase가 complete가 되면 로컬도 complete로
+  // Phase 2: Selecting - 뷰어 (Firebase 상태를 그대로 표시)
   useEffect(() => {
     if (isController) return;
 
     const firebasePhase = round.animationState?.phase;
     const firebaseNumbers = round.animationState?.selectedNumbers || [];
+    const firebaseCurrentBall = round.animationState?.currentBall;
 
-    if (firebasePhase === 'complete' || firebasePhase === 'revealing') {
-      // 모든 번호를 즉시 설정하고 완료 처리
-      setSelectedNumbers(firebaseNumbers);
+    // Firebase 상태를 그대로 반영
+    if (firebasePhase && firebasePhase !== 'mixing') {
       setPhase(firebasePhase);
-
-      if (firebasePhase === 'complete' && !completedRef.current) {
-        completedRef.current = true;
-        setTimeout(() => {
-          onComplete(firebaseNumbers);
-        }, 1500);
-      }
     }
-  }, [isController, round.animationState?.phase, round.animationState?.selectedNumbers, onComplete]);
+    setSelectedNumbers(firebaseNumbers);
+    setCurrentBall(firebaseCurrentBall ?? null);
+  }, [isController, round.animationState]);
+
+  // 뷰어: complete 상태가 되면 onComplete 호출
+  useEffect(() => {
+    if (isController) return;
+
+    if (phase === 'complete' && selectedNumbers.length > 0 && !completedRef.current) {
+      completedRef.current = true;
+      setTimeout(() => {
+        onComplete(selectedNumbers);
+      }, 1500);
+    }
+  }, [isController, phase, selectedNumbers, onComplete]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-500 via-cyan-500 to-sky-400 flex flex-col items-center justify-center z-50 overflow-hidden">
