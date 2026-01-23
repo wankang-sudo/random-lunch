@@ -21,8 +21,8 @@ export default function SettingsPage() {
 
   const [newMemberName, setNewMemberName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [drawCount, setDrawCount] = useState(3);
-  const [nextWeekCount, setNextWeekCount] = useState(4);
+  const [drawCount, setDrawCount] = useState(4);
+  const [nextWeekCount, setNextWeekCount] = useState(5);
   const [includeAbsentees, setIncludeAbsentees] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
