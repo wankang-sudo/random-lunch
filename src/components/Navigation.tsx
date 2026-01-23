@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/', label: '추첨하기', icon: '🎱' },
   { href: '/history', label: '기록', icon: '📅' },
+  { href: '/restaurants', label: '식당모음', icon: '🍽️' },
   { href: '/score', label: '스코어', icon: '🏆' },
   { href: '/bestfriend', label: '찐친', icon: '👯' },
   { href: '/settings', label: '설정', icon: '⚙️' },
