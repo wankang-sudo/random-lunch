@@ -77,7 +77,7 @@ export default function LotteryAnimation({
       isSelectingRef.current = true;
       setIsSpinning(true);
       let count = 0;
-      const maxCount = 15;
+      const maxCount = 25; // 스핀 횟수 증가 (15 -> 25)
       const currentRemaining = allNumbers.filter((n) => !selectedNumbers.includes(n));
 
       const spin = () => {

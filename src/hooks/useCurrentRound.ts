@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, set, update } from 'firebase/database';
 import { getDb } from '@/lib/firebase';
 import { Round, RoundStatus, AnimationState, AnimationPhase } from '@/types';
@@ -18,6 +18,12 @@ export function useCurrentRound() {
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const roundRef = useRef<Round | null>(null);
+
+  // round가 변경될 때 ref도 업데이트
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
 
   useEffect(() => {
     const db = getDb();
@@ -176,15 +182,15 @@ export function useCurrentRound() {
     return selectedCount === round.participantIds.length;
   };
 
-  // 애니메이션 상태 업데이트
-  const updateAnimationState = async (
+  // 애니메이션 상태 업데이트 (useCallback으로 안정적인 참조 유지)
+  const updateAnimationState = useCallback(async (
     phase: AnimationPhase,
     selectedNumbers: number[],
     currentBall: number | null,
     spinningIndex: number = 0
   ) => {
     const db = getDb();
-    if (!db || !round) return;
+    if (!db || !roundRef.current) return;
 
     const animationState: AnimationState = {
       phase,
@@ -197,17 +203,17 @@ export function useCurrentRound() {
     await update(ref(db, 'currentRound'), {
       animationState,
     });
-  };
+  }, []);
 
   // 애니메이션 상태 초기화
-  const clearAnimationState = async () => {
+  const clearAnimationState = useCallback(async () => {
     const db = getDb();
     if (!db) return;
 
     await update(ref(db, 'currentRound'), {
       animationState: null,
     });
-  };
+  }, []);
 
   return {
     round,

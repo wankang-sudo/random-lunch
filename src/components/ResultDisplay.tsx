@@ -6,6 +6,38 @@ import { useHistory } from '@/hooks/useHistory';
 import { useSettings } from '@/hooks/useSettings';
 import AdminPasswordModal from '@/components/AdminPasswordModal';
 
+// 콘페티 조각 데이터 (컴포넌트 외부에서 한 번만 생성)
+const confettiData = Array.from({ length: 30 }, (_, i) => ({
+  id: i,
+  color: ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#A78BFA', '#FB7185'][i % 6],
+  left: `${(i * 3.3) % 100}%`,
+  delay: `${(i * 0.15) % 3}s`,
+  duration: `${3 + (i % 3)}s`,
+  size: `${8 + (i % 4) * 2}px`,
+}));
+
+// 콘페티 컨테이너
+function Confetti() {
+  return (
+    <div className="confetti-container">
+      {confettiData.map((piece) => (
+        <div
+          key={piece.id}
+          className="confetti-piece"
+          style={{
+            left: piece.left,
+            backgroundColor: piece.color,
+            width: piece.size,
+            height: piece.size,
+            animationDelay: piece.delay,
+            animationDuration: piece.duration,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 interface ResultDisplayProps {
   round: Round;
   members: Member[];
@@ -159,7 +191,8 @@ export default function ResultDisplay({ round, members }: ResultDisplayProps) {
       </div>
 
       {/* 이번 주 점심 조 */}
-      <div className="result-card bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
+      <div className="result-card bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200 relative overflow-hidden">
+        <Confetti />
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-blue-600 flex items-center gap-2">
             🍱 이번 주 점심 조

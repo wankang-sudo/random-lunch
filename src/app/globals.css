@@ -84,32 +84,78 @@ body {
 }
 
 /* 마퀴 애니메이션 */
-@keyframes marquee {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+.marquee-wrapper {
+  display: flex;
+  overflow: hidden;
+  width: 100%;
 }
 
-.animate-marquee {
-  display: inline-block;
-  animation: marquee 15s linear infinite;
+.marquee-content {
+  display: flex;
+  animation: marquee-scroll 15s linear infinite;
+  min-width: 100%;
+}
+
+.marquee-content span {
+  flex-shrink: 0;
+}
+
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 /* 혜택 카드 glow 애니메이션 */
 @keyframes benefit-glow {
   0%, 100% {
-    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1),
-                0 2px 4px -1px rgba(59, 130, 246, 0.06);
+    box-shadow: 0 4px 10px -1px rgba(59, 130, 246, 0.2),
+                0 2px 6px -1px rgba(59, 130, 246, 0.1);
   }
   50% {
-    box-shadow: 0 4px 15px -1px rgba(59, 130, 246, 0.3),
-                0 2px 8px -1px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 4px 30px -1px rgba(59, 130, 246, 0.5),
+                0 2px 20px -1px rgba(59, 130, 246, 0.4);
   }
 }
 
 .animate-benefit-glow {
   animation: benefit-glow 2s ease-in-out infinite;
+}
+
+/* 콘페티 애니메이션 */
+.confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -40px;
+  border-radius: 3px;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(300px) rotate(720deg) scale(0.5);
+    opacity: 0;
+  }
 }

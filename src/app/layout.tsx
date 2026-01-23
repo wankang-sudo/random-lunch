@@ -31,8 +31,8 @@ export default function RootLayout({
         {/* 헤더 */}
         <header className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 shadow-lg overflow-hidden">
           <div className="max-w-4xl mx-auto px-4">
-            <div className="relative overflow-hidden">
-              <div className="animate-marquee whitespace-nowrap text-2xl font-bold">
+            <div className="marquee-wrapper">
+              <div className="marquee-content text-2xl font-bold">
                 <span>🍱</span>
                 <span className="text-red-300">나</span>
                 <span className="text-orange-300">노</span>
@@ -45,6 +45,7 @@ export default function RootLayout({
                 <span className="text-red-300">추</span>
                 <span className="text-orange-300">첨</span>
                 <span className="text-yellow-300">기</span>
+                <span className="mx-4">✨</span>
                 <span className="text-green-300">즐</span>
                 <span className="text-cyan-300">거</span>
                 <span className="text-blue-300">운</span>
@@ -63,6 +64,9 @@ export default function RootLayout({
                 <span className="text-yellow-300">보</span>
                 <span className="text-green-300">아</span>
                 <span className="text-cyan-300">요</span>
+                <span className="mx-4">🎉</span>
+              </div>
+              <div className="marquee-content text-2xl font-bold">
                 <span>🍱</span>
                 <span className="text-red-300">나</span>
                 <span className="text-orange-300">노</span>
@@ -75,6 +79,7 @@ export default function RootLayout({
                 <span className="text-red-300">추</span>
                 <span className="text-orange-300">첨</span>
                 <span className="text-yellow-300">기</span>
+                <span className="mx-4">✨</span>
                 <span className="text-green-300">즐</span>
                 <span className="text-cyan-300">거</span>
                 <span className="text-blue-300">운</span>
@@ -93,6 +98,7 @@ export default function RootLayout({
                 <span className="text-yellow-300">보</span>
                 <span className="text-green-300">아</span>
                 <span className="text-cyan-300">요</span>
+                <span className="mx-4">🎉</span>
               </div>
             </div>
           </div>
