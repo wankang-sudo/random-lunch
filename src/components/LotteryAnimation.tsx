@@ -1,38 +1,49 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Member, Round } from '@/types';
+import { Member, Round, AnimationPhase } from '@/types';
 
 interface LotteryAnimationProps {
   round: Round;
   members: Member[];
+  isController: boolean;
   onComplete: (selectedNumbers: number[]) => void;
+  onAnimationUpdate?: (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null) => void;
 }
 
 export default function LotteryAnimation({
   round,
   members,
+  isController,
   onComplete,
+  onAnimationUpdate,
 }: LotteryAnimationProps) {
-  const [phase, setPhase] = useState<'mixing' | 'selecting' | 'revealing' | 'complete'>('mixing');
+  // 로컬 애니메이션 상태 (컨트롤러와 뷰어 모두 사용)
+  const [phase, setPhase] = useState<AnimationPhase>('mixing');
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
+  const completedRef = useRef(false);
+  const lastSyncedCountRef = useRef(0);
+
   const selections = round.numberSelections || {};
   const allNumbers = useMemo(() => Object.keys(selections).map(Number), [selections]);
-  const remainingNumbers = useMemo(
-    () => allNumbers.filter((n) => !selectedNumbers.includes(n)),
-    [allNumbers, selectedNumbers]
-  );
 
   const getMemberName = (memberId: string) => {
     const member = members.find((m) => m.id === memberId);
     return member?.name || '알 수 없음';
   };
 
-  // Phase 1: Mixing
+  // 컨트롤러: Firebase 업데이트 (phase와 selectedNumbers 변경 시)
+  useEffect(() => {
+    if (isController && onAnimationUpdate) {
+      onAnimationUpdate(phase, selectedNumbers, currentBall);
+    }
+  }, [isController, phase, selectedNumbers, onAnimationUpdate]);
+
+  // Phase 1: Mixing (2초)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPhase('selecting');
@@ -40,14 +51,18 @@ export default function LotteryAnimation({
     return () => clearTimeout(timer);
   }, []);
 
-  // Phase 2: Selecting
+  // Phase 2: Selecting - 컨트롤러
   useEffect(() => {
+    if (!isController) return;
     if (phase !== 'selecting') return;
     if (selectedNumbers.length >= round.drawCount) {
       setPhase('revealing');
       setTimeout(() => {
         setPhase('complete');
-        onComplete(selectedNumbers);
+        if (!completedRef.current) {
+          completedRef.current = true;
+          onComplete(selectedNumbers);
+        }
       }, 1500);
       return;
     }
@@ -56,12 +71,12 @@ export default function LotteryAnimation({
       setIsSpinning(true);
       let count = 0;
       const maxCount = 15;
+      const currentRemaining = allNumbers.filter((n) => !selectedNumbers.includes(n));
 
       const spin = () => {
         if (count >= maxCount) {
-          // Final selection
-          const finalIndex = Math.floor(Math.random() * remainingNumbers.length);
-          const selected = remainingNumbers[finalIndex];
+          const finalIndex = Math.floor(Math.random() * currentRemaining.length);
+          const selected = currentRemaining[finalIndex];
           setCurrentBall(selected);
           setIsSpinning(false);
 
@@ -72,11 +87,9 @@ export default function LotteryAnimation({
           return;
         }
 
-        const randomIndex = Math.floor(Math.random() * remainingNumbers.length);
-        setCurrentBall(remainingNumbers[randomIndex]);
+        const randomIndex = Math.floor(Math.random() * currentRemaining.length);
+        setCurrentBall(currentRemaining[randomIndex]);
         count++;
-
-        // Gradually slow down
         const delay = 50 + count * 15;
         setTimeout(spin, delay);
       };
@@ -86,7 +99,76 @@ export default function LotteryAnimation({
 
     const timer = setTimeout(startSelection, 500);
     return () => clearTimeout(timer);
-  }, [phase, selectedNumbers, round.drawCount, remainingNumbers, onComplete]);
+  }, [isController, phase, selectedNumbers, round.drawCount, allNumbers, onComplete]);
+
+  // Phase 2: Selecting - 뷰어 (Firebase 상태를 따라감)
+  useEffect(() => {
+    if (isController) return;
+    if (phase !== 'selecting') return;
+
+    const firebaseNumbers = round.animationState?.selectedNumbers || [];
+
+    // 새로운 번호가 Firebase에 추가되었는지 확인
+    if (firebaseNumbers.length > lastSyncedCountRef.current) {
+      const newNumbers = firebaseNumbers.slice(lastSyncedCountRef.current);
+
+      // 새 번호들을 순차적으로 애니메이션
+      newNumbers.forEach((num, idx) => {
+        setTimeout(() => {
+          // 스핀 애니메이션
+          setIsSpinning(true);
+          const remainingNumbers = allNumbers.filter((n) => !selectedNumbers.includes(n) && !firebaseNumbers.slice(0, lastSyncedCountRef.current + idx).includes(n));
+
+          let spinCount = 0;
+          const spinInterval = setInterval(() => {
+            if (spinCount >= 10) {
+              clearInterval(spinInterval);
+              setCurrentBall(num);
+              setIsSpinning(false);
+
+              setTimeout(() => {
+                setSelectedNumbers((prev) => {
+                  if (!prev.includes(num)) {
+                    return [...prev, num];
+                  }
+                  return prev;
+                });
+                setCurrentBall(null);
+              }, 800);
+              return;
+            }
+
+            const randomIdx = Math.floor(Math.random() * remainingNumbers.length);
+            setCurrentBall(remainingNumbers[randomIdx] || num);
+            spinCount++;
+          }, 80);
+        }, idx * 2500); // 각 번호 사이에 2.5초 간격
+      });
+
+      lastSyncedCountRef.current = firebaseNumbers.length;
+    }
+  }, [isController, phase, round.animationState?.selectedNumbers, allNumbers, selectedNumbers]);
+
+  // 뷰어: Firebase phase가 complete가 되면 로컬도 complete로
+  useEffect(() => {
+    if (isController) return;
+
+    const firebasePhase = round.animationState?.phase;
+    const firebaseNumbers = round.animationState?.selectedNumbers || [];
+
+    if (firebasePhase === 'complete' || firebasePhase === 'revealing') {
+      // 모든 번호를 즉시 설정하고 완료 처리
+      setSelectedNumbers(firebaseNumbers);
+      setPhase(firebasePhase);
+
+      if (firebasePhase === 'complete' && !completedRef.current) {
+        completedRef.current = true;
+        setTimeout(() => {
+          onComplete(firebaseNumbers);
+        }, 1500);
+      }
+    }
+  }, [isController, round.animationState?.phase, round.animationState?.selectedNumbers, onComplete]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-500 via-cyan-500 to-sky-400 flex flex-col items-center justify-center z-50 overflow-hidden">
@@ -105,6 +187,17 @@ export default function LotteryAnimation({
           }}
         />
       </div>
+
+      {/* 관전 모드 표시 */}
+      {!isController && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-medium z-20"
+        >
+          👀 실시간 추첨 중...
+        </motion.div>
+      )}
 
       {/* 타이틀 */}
       <motion.h2
@@ -131,7 +224,7 @@ export default function LotteryAnimation({
           ease: 'easeInOut',
         }}
       >
-        {/* 믹싱 단계 - 공들이 튀어다님 */}
+        {/* 믹싱 단계 */}
         {phase === 'mixing' && (
           <div className="flex flex-wrap gap-2 p-6 justify-center">
             {allNumbers.map((num, index) => (
@@ -155,7 +248,7 @@ export default function LotteryAnimation({
           </div>
         )}
 
-        {/* 선택 단계 - 현재 번호 표시 */}
+        {/* 선택 단계 */}
         {(phase === 'selecting' || phase === 'revealing') && (
           <AnimatePresence mode="wait">
             {currentBall !== null ? (
@@ -223,7 +316,7 @@ export default function LotteryAnimation({
           🍱 이번 주 점심 조 ({selectedNumbers.length}/{round.drawCount})
         </p>
         <div className="flex flex-wrap gap-3 justify-center min-h-16">
-          {selectedNumbers.map((num, index) => (
+          {selectedNumbers.map((num) => (
             <motion.div
               key={`selected-${num}`}
               initial={{ scale: 0, y: -20 }}

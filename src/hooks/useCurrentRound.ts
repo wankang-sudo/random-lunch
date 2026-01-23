@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ref, onValue, set, update } from 'firebase/database';
 import { getDb } from '@/lib/firebase';
-import { Round, RoundStatus } from '@/types';
+import { Round, RoundStatus, AnimationState, AnimationPhase } from '@/types';
 
 const DEFAULT_DRAW_COUNTS: Record<number, number> = {
   9: 4,
@@ -176,6 +176,37 @@ export function useCurrentRound() {
     return selectedCount === round.participantIds.length;
   };
 
+  // 애니메이션 상태 업데이트
+  const updateAnimationState = async (
+    phase: AnimationPhase,
+    selectedNumbers: number[],
+    currentBall: number | null
+  ) => {
+    const db = getDb();
+    if (!db || !round) return;
+
+    const animationState: AnimationState = {
+      phase,
+      selectedNumbers,
+      currentBall,
+      updatedAt: Date.now(),
+    };
+
+    await update(ref(db, 'currentRound'), {
+      animationState,
+    });
+  };
+
+  // 애니메이션 상태 초기화
+  const clearAnimationState = async () => {
+    const db = getDb();
+    if (!db) return;
+
+    await update(ref(db, 'currentRound'), {
+      animationState: null,
+    });
+  };
+
   return {
     round,
     loading,
@@ -189,5 +220,7 @@ export function useCurrentRound() {
     saveSnapshot,
     resetRound,
     isAllNumbersSelected,
+    updateAnimationState,
+    clearAnimationState,
   };
 }

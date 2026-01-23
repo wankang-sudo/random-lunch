@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useMembers } from '@/hooks/useMembers';
 import { useCurrentRound } from '@/hooks/useCurrentRound';
 import { useStatistics } from '@/hooks/useStatistics';
@@ -10,8 +10,11 @@ import UserSelector, { getSavedUserId } from '@/components/UserSelector';
 import AdminPasswordModal from '@/components/AdminPasswordModal';
 import LotteryAnimation from '@/components/LotteryAnimation';
 import ResultDisplay from '@/components/ResultDisplay';
+import { AnimationPhase } from '@/types';
 
 export default function Home() {
+  console.log('🏠 Home 컴포넌트 렌더링');
+
   const { members, loading: membersLoading } = useMembers();
   const {
     round,
@@ -21,13 +24,16 @@ export default function Home() {
     updateStatus,
     saveDrawResult,
     saveSnapshot,
+    updateAnimationState,
+    clearAnimationState,
   } = useCurrentRound();
   const { statistics, incrementScore, incrementGroupPairCounts } = useStatistics();
   const { verifyPassword } = useSettings();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [isController, setIsController] = useState(false); // 이 PC가 추첨을 시작했는지
+  const drawCompleteHandledRef = useRef(false);
 
   // 저장된 사용자 ID 로드
   useEffect(() => {
@@ -36,6 +42,22 @@ export default function Home() {
       setCurrentUserId(savedId);
     }
   }, []);
+
+  // 라운드 상태가 drawing이 아닐 때 ref 리셋
+  useEffect(() => {
+    if (round?.status !== 'drawing') {
+      drawCompleteHandledRef.current = false;
+    }
+  }, [round?.status]);
+
+  // 디버깅: round 상태 변경 감지
+  useEffect(() => {
+    console.log('🔄 Round 상태 변경:', {
+      status: round?.status,
+      hasAnimationState: !!round?.animationState,
+      animationPhase: round?.animationState?.phase,
+    });
+  }, [round?.status, round?.animationState]);
 
   const handleUserSelect = useCallback((memberId: string) => {
     setCurrentUserId(memberId);
@@ -72,13 +94,37 @@ export default function Home() {
     // 스냅샷 저장 (롤백용)
     await saveSnapshot(statistics.memberScores, statistics.pairCounts);
 
-    // 추첨 상태로 변경
+    // 이 PC가 컨트롤러임을 표시
+    setIsController(true);
+    drawCompleteHandledRef.current = false;
+
+    // 추첨 상태로 변경 (다른 PC도 이 상태를 감지하고 애니메이션 표시)
     await updateStatus('drawing');
-    setIsDrawing(true);
   };
 
+  // 애니메이션 상태 업데이트 핸들러 (컨트롤러만 호출)
+  const handleAnimationUpdate = useCallback(
+    async (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null) => {
+      if (isController) {
+        await updateAnimationState(phase, selectedNumbers, currentBall);
+      }
+    },
+    [isController, updateAnimationState]
+  );
+
   const handleDrawComplete = async (selectedNumbers: number[]) => {
-    if (!round) return;
+    // 이미 처리됐으면 스킵 (중복 호출 방지)
+    if (drawCompleteHandledRef.current) return;
+    drawCompleteHandledRef.current = true;
+
+    // 컨트롤러만 결과 저장 및 통계 업데이트 수행
+    if (!isController || !round) {
+      // 뷰어는 애니메이션만 보고 상태 초기화
+      setTimeout(() => {
+        setIsController(false);
+      }, 2000);
+      return;
+    }
 
     // 이번 주 조 멤버 ID 추출 (undefined 값 필터링)
     const selections = round.numberSelections || {};
@@ -128,10 +174,12 @@ export default function Home() {
     await incrementGroupPairCounts(thisWeekMemberIds);
     await incrementGroupPairCounts(nextWeekMemberIds);
 
-    // 애니메이션 종료
-    setTimeout(() => {
-      setIsDrawing(false);
-    }, 2000);
+    // 애니메이션 상태 정리 및 컨트롤러 상태 초기화
+    // 다른 PC들이 결과를 볼 수 있도록 3초 후 정리
+    setTimeout(async () => {
+      await clearAnimationState();
+      setIsController(false);
+    }, 3000);
   };
 
   // 모든 참여자가 번호를 선택했는지 확인
@@ -172,13 +220,25 @@ export default function Home() {
     );
   }
 
-  // 추첨 애니메이션 중
-  if (isDrawing) {
+  // 추첨 애니메이션 중 (컨트롤러 또는 뷰어 모두)
+  // status가 drawing이거나, animationState가 존재하면 애니메이션 표시
+  const shouldShowAnimation = round.status === 'drawing' || !!round.animationState;
+
+  // 디버깅
+  console.log('=== Animation Debug ===');
+  console.log('round.status:', round.status);
+  console.log('round.animationState:', round.animationState);
+  console.log('isController:', isController);
+  console.log('shouldShowAnimation:', shouldShowAnimation);
+
+  if (shouldShowAnimation) {
     return (
       <LotteryAnimation
         round={round}
         members={members}
+        isController={isController}
         onComplete={handleDrawComplete}
+        onAnimationUpdate={handleAnimationUpdate}
       />
     );
   }

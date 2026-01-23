@@ -16,9 +16,6 @@ export default function BestFriendPage() {
   const pairCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
-    // 디버깅: 모든 기록 출력
-    console.log('전체 기록:', records.map(r => ({ date: r.date, id: r.id, memberNames: r.memberNames })));
-
     // 모든 기록에서 함께 식사한 조합 카운팅
     records.forEach((record) => {
       if (Array.isArray(record.memberNames) && record.memberNames.length >= 2) {

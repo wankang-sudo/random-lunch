@@ -10,6 +10,16 @@ export interface Member {
 // 라운드 상태
 export type RoundStatus = 'selecting' | 'ready' | 'drawing' | 'completed';
 
+// 애니메이션 상태
+export type AnimationPhase = 'mixing' | 'selecting' | 'revealing' | 'complete';
+
+export interface AnimationState {
+  phase: AnimationPhase;
+  selectedNumbers: number[];
+  currentBall: number | null;
+  updatedAt: number;
+}
+
 // 라운드 타입
 export interface Round {
   id: string;
@@ -22,6 +32,7 @@ export interface Round {
   includeAbsentees: boolean; // 미참여 멤버 다음주 필수 배정 여부
   thisWeekGroup: string[];
   nextWeekGroup: string[];
+  animationState?: AnimationState; // 추첨 애니메이션 동기화용
   preDrawSnapshot: {
     memberScores: Record<string, number>;
     pairCounts: Record<string, number>;
