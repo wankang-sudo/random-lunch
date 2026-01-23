@@ -25,6 +25,7 @@ export default function LotteryAnimation({
   const [isSpinning, setIsSpinning] = useState(false);
 
   const completedRef = useRef(false);
+  const isSelectingRef = useRef(false); // 선택 진행 중 플래그
 
   const selections = round.numberSelections || {};
   const allNumbers = useMemo(() => Object.keys(selections).map(Number), [selections]);
@@ -57,6 +58,7 @@ export default function LotteryAnimation({
     if (!isController) return;
     if (phase !== 'selecting') return;
     if (selectedNumbers.length >= round.drawCount) {
+      isSelectingRef.current = false;
       setPhase('revealing');
       setTimeout(() => {
         setPhase('complete');
@@ -68,7 +70,11 @@ export default function LotteryAnimation({
       return;
     }
 
+    // 이미 선택 진행 중이면 중복 시작 방지
+    if (isSelectingRef.current) return;
+
     const startSelection = () => {
+      isSelectingRef.current = true;
       setIsSpinning(true);
       let count = 0;
       const maxCount = 15;
@@ -84,6 +90,7 @@ export default function LotteryAnimation({
           setTimeout(() => {
             setSelectedNumbers((prev) => [...prev, selected]);
             setCurrentBall(null);
+            isSelectingRef.current = false; // 선택 완료
           }, 1000);
           return;
         }
