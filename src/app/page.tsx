@@ -104,9 +104,9 @@ export default function Home() {
 
   // 애니메이션 상태 업데이트 핸들러 (컨트롤러만 호출)
   const handleAnimationUpdate = useCallback(
-    async (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null) => {
+    async (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null, spinningIndex?: number) => {
       if (isController) {
-        await updateAnimationState(phase, selectedNumbers, currentBall);
+        await updateAnimationState(phase, selectedNumbers, currentBall, spinningIndex ?? 0);
       }
     },
     [isController, updateAnimationState]

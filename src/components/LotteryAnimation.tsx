@@ -9,7 +9,7 @@ interface LotteryAnimationProps {
   members: Member[];
   isController: boolean;
   onComplete: (selectedNumbers: number[]) => void;
-  onAnimationUpdate?: (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null) => void;
+  onAnimationUpdate?: (phase: AnimationPhase, selectedNumbers: number[], currentBall: number | null, spinningIndex?: number) => void;
 }
 
 export default function LotteryAnimation({
@@ -19,13 +19,14 @@ export default function LotteryAnimation({
   onComplete,
   onAnimationUpdate,
 }: LotteryAnimationProps) {
-  // 로컬 애니메이션 상태 (컨트롤러와 뷰어 모두 사용)
   const [phase, setPhase] = useState<AnimationPhase>('mixing');
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [spinningIndex, setSpinningIndex] = useState(-1);
 
   const completedRef = useRef(false);
+  const viewerSpinningIndexRef = useRef(-1);
 
   const selections = round.numberSelections || {};
   const allNumbers = useMemo(() => Object.keys(selections).map(Number), [selections]);
@@ -35,20 +36,21 @@ export default function LotteryAnimation({
     return member?.name || '알 수 없음';
   };
 
-  // 컨트롤러: Firebase 업데이트 (phase와 selectedNumbers만 - currentBall은 너무 빨라서 제외)
+  // 컨트롤러: Firebase 업데이트
   useEffect(() => {
     if (isController && onAnimationUpdate) {
-      onAnimationUpdate(phase, selectedNumbers, null);
+      onAnimationUpdate(phase, selectedNumbers, null, spinningIndex);
     }
-  }, [isController, phase, selectedNumbers, onAnimationUpdate]);
+  }, [isController, phase, selectedNumbers, spinningIndex, onAnimationUpdate]);
 
-  // Phase 1: Mixing (2초)
+  // Phase 1: Mixing (2초) - 컨트롤러만
   useEffect(() => {
+    if (!isController) return;
     const timer = setTimeout(() => {
       setPhase('selecting');
     }, 2000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isController]);
 
   // Phase 2: Selecting - 컨트롤러
   useEffect(() => {
@@ -67,7 +69,10 @@ export default function LotteryAnimation({
     }
 
     const startSelection = () => {
+      // 스핀 시작을 먼저 알림
+      setSpinningIndex(selectedNumbers.length);
       setIsSpinning(true);
+
       let count = 0;
       const maxCount = 15;
       const currentRemaining = allNumbers.filter((n) => !selectedNumbers.includes(n));
@@ -100,60 +105,83 @@ export default function LotteryAnimation({
     return () => clearTimeout(timer);
   }, [isController, phase, selectedNumbers, round.drawCount, allNumbers, onComplete]);
 
-  // 뷰어: Firebase에서 새 번호가 추가되면 자체 스핀 애니메이션 실행
-  const prevFirebaseNumbersRef = useRef<number[]>([]);
-
+  // 뷰어: Firebase 상태 감지 및 애니메이션
   useEffect(() => {
     if (isController) return;
 
     const firebasePhase = round.animationState?.phase;
     const firebaseNumbers = round.animationState?.selectedNumbers || [];
+    const firebaseSpinningIndex = round.animationState?.spinningIndex ?? -1;
 
-    // phase 업데이트
-    if (firebasePhase) {
+    // phase 업데이트 (mixing은 로컬에서 처리)
+    if (firebasePhase && firebasePhase !== 'mixing') {
       setPhase(firebasePhase);
     }
 
-    // 새로 추가된 번호 확인
-    const prevNumbers = prevFirebaseNumbersRef.current;
-    const newNumbers = firebaseNumbers.filter(n => !prevNumbers.includes(n));
+    // 새로운 스핀 시작 감지
+    if (firebaseSpinningIndex > viewerSpinningIndexRef.current && firebasePhase === 'selecting') {
+      viewerSpinningIndexRef.current = firebaseSpinningIndex;
 
-    if (newNumbers.length > 0 && firebasePhase === 'selecting') {
-      // 새 번호에 대해 스핀 애니메이션 실행
-      const newNumber = newNumbers[newNumbers.length - 1];
-      const remainingNumbers = allNumbers.filter(n => !prevNumbers.includes(n));
-
+      // 뷰어 자체 스핀 애니메이션 시작
+      const remainingNumbers = allNumbers.filter((n) => !selectedNumbers.includes(n));
       setIsSpinning(true);
+      setSpinningIndex(firebaseSpinningIndex);
+
       let spinCount = 0;
-      const maxSpins = 12;
+      const maxSpins = 15;
 
       const spinInterval = setInterval(() => {
-        if (spinCount >= maxSpins) {
+        // Firebase에서 결과가 도착했는지 확인
+        const latestNumbers = round.animationState?.selectedNumbers || [];
+        if (latestNumbers.length > selectedNumbers.length) {
+          // 결과 도착 - 스핀 종료
           clearInterval(spinInterval);
+          const newNumber = latestNumbers[latestNumbers.length - 1];
           setCurrentBall(newNumber);
           setIsSpinning(false);
 
           setTimeout(() => {
-            setSelectedNumbers(firebaseNumbers);
+            setSelectedNumbers(latestNumbers);
             setCurrentBall(null);
           }, 800);
           return;
         }
 
+        if (spinCount >= maxSpins) {
+          // 아직 결과 미도착 - 계속 스핀
+          spinCount = 0;
+        }
+
         const randomIdx = Math.floor(Math.random() * remainingNumbers.length);
-        setCurrentBall(remainingNumbers[randomIdx] || newNumber);
+        setCurrentBall(remainingNumbers[randomIdx] || allNumbers[0]);
         spinCount++;
-      }, 60);
-    } else if (firebasePhase === 'revealing' || firebasePhase === 'complete') {
-      // 완료 단계에서는 바로 반영
-      setSelectedNumbers(firebaseNumbers);
-      setCurrentBall(null);
+      }, 70);
+
+      // 타임아웃 (최대 5초)
+      setTimeout(() => {
+        clearInterval(spinInterval);
+      }, 5000);
     }
 
-    prevFirebaseNumbersRef.current = firebaseNumbers;
-  }, [isController, round.animationState?.phase, round.animationState?.selectedNumbers, allNumbers]);
+    // 완료 단계
+    if (firebasePhase === 'revealing' || firebasePhase === 'complete') {
+      setSelectedNumbers(firebaseNumbers);
+      setCurrentBall(null);
+      setIsSpinning(false);
+    }
+  }, [isController, round.animationState, allNumbers, selectedNumbers]);
 
-  // 뷰어: complete 상태가 되면 onComplete 호출
+  // 뷰어: mixing 애니메이션 (로컬)
+  useEffect(() => {
+    if (isController) return;
+
+    const firebasePhase = round.animationState?.phase;
+    if (firebasePhase === 'mixing' || !firebasePhase) {
+      setPhase('mixing');
+    }
+  }, [isController, round.animationState?.phase]);
+
+  // 뷰어: complete 시 onComplete 호출
   useEffect(() => {
     if (isController) return;
 

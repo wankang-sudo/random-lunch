@@ -180,7 +180,8 @@ export function useCurrentRound() {
   const updateAnimationState = async (
     phase: AnimationPhase,
     selectedNumbers: number[],
-    currentBall: number | null
+    currentBall: number | null,
+    spinningIndex: number = 0
   ) => {
     const db = getDb();
     if (!db || !round) return;
@@ -189,6 +190,7 @@ export function useCurrentRound() {
       phase,
       selectedNumbers,
       currentBall,
+      spinningIndex,
       updatedAt: Date.now(),
     };
 

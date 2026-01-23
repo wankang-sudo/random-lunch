@@ -17,6 +17,7 @@ export interface AnimationState {
   phase: AnimationPhase;
   selectedNumbers: number[];
   currentBall: number | null;
+  spinningIndex: number; // 현재 몇 번째 공을 뽑는 중인지 (0부터 시작)
   updatedAt: number;
 }
 
