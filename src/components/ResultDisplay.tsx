@@ -11,10 +11,11 @@ interface ResultDisplayProps {
   members: Member[];
 }
 
-// 금요일 날짜 생성 함수 (최근 4주 + 앞으로 2주)
+// 금요일 날짜 생성 함수 (최근 4주 + 앞으로 2개 금요일)
 function generateFridays(): string[] {
   const fridays: string[] = [];
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // 4주 전부터
   const startDate = new Date(today);
@@ -25,17 +26,25 @@ function generateFridays(): string[] {
     startDate.setDate(startDate.getDate() + 1);
   }
 
-  // 2주 후까지
-  const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + 14);
-
+  // 오늘까지의 금요일 추가
   let current = new Date(startDate);
-  while (current <= endDate) {
+  while (current <= today) {
     const year = current.getFullYear();
     const month = String(current.getMonth() + 1).padStart(2, '0');
     const day = String(current.getDate()).padStart(2, '0');
     fridays.push(`${year}-${month}-${day}`);
     current.setDate(current.getDate() + 7);
+  }
+
+  // 미래 금요일 2개 추가
+  let futureFridayCount = 0;
+  while (futureFridayCount < 2) {
+    const year = current.getFullYear();
+    const month = String(current.getMonth() + 1).padStart(2, '0');
+    const day = String(current.getDate()).padStart(2, '0');
+    fridays.push(`${year}-${month}-${day}`);
+    current.setDate(current.getDate() + 7);
+    futureFridayCount++;
   }
 
   return fridays;
@@ -135,9 +144,17 @@ export default function ResultDisplay({ round, members }: ResultDisplayProps) {
             관리자 모드
           </button>
         ) : (
-          <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-            관리자 모드 활성화
-          </span>
+          <div className="inline-flex items-center gap-2">
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              관리자 모드 활성화
+            </span>
+            <button
+              onClick={() => setIsAdmin(false)}
+              className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm hover:bg-gray-200 transition-colors"
+            >
+              종료
+            </button>
+          </div>
         )}
       </div>
 

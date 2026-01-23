@@ -1,31 +1,44 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useMembers } from '@/hooks/useMembers';
-import { useStatistics } from '@/hooks/useStatistics';
+import { useHistory } from '@/hooks/useHistory';
 
 export default function ScorePage() {
   const { members, loading: membersLoading } = useMembers();
-  const { statistics, loading: statsLoading, getScoreRanking } = useStatistics();
+  const { records, loading: historyLoading } = useHistory();
 
-  if (membersLoading || statsLoading) {
+  // 기록 기반 스코어 계산
+  const ranking = useMemo(() => {
+    const scoreMap = new Map<string, number>();
+
+    // 당첨 기록(isWinner: true)에서 멤버별 점수 계산
+    records.forEach((record) => {
+      if (record.isWinner && Array.isArray(record.memberNames)) {
+        record.memberNames.forEach((name) => {
+          if (name && typeof name === 'string') {
+            const currentScore = scoreMap.get(name) || 0;
+            scoreMap.set(name, currentScore + 1);
+          }
+        });
+      }
+    });
+
+    // 배열로 변환하고 점수 순으로 정렬
+    return Array.from(scoreMap.entries())
+      .map(([name, score]) => ({ name, score }))
+      .sort((a, b) => b.score - a.score);
+  }, [records]);
+
+  const medals = ['🥇', '🥈', '🥉'];
+
+  if (membersLoading || historyLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full" />
       </div>
     );
   }
-
-  const getMemberName = (memberId: string) => {
-    const member = members.find((m) => m.id === memberId);
-    return member?.name || null;
-  };
-
-  // 존재하는 멤버만 필터링
-  const ranking = getScoreRanking().filter((item) => {
-    return getMemberName(item.memberId) !== null;
-  });
-
-  const medals = ['🥇', '🥈', '🥉'];
 
   return (
     <div className="space-y-6">
@@ -45,7 +58,7 @@ export default function ScorePage() {
         <div className="space-y-3">
           {ranking.map((item, index) => (
             <div
-              key={item.memberId}
+              key={item.name}
               className={`
                 flex items-center gap-4 p-4 rounded-xl
                 ${index < 3 ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border border-blue-200' : 'bg-white border border-gray-100'}
@@ -64,7 +77,7 @@ export default function ScorePage() {
               {/* 이름 */}
               <div className="flex-1">
                 <span className={`font-medium ${index < 3 ? 'text-gray-800' : 'text-gray-700'}`}>
-                  {getMemberName(item.memberId) || ''}
+                  {item.name}
                 </span>
               </div>
 

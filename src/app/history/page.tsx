@@ -5,8 +5,8 @@ import { useHistory } from '@/hooks/useHistory';
 import { useSettings } from '@/hooks/useSettings';
 import AdminPasswordModal from '@/components/AdminPasswordModal';
 
-// 금요일 날짜 생성 함수 (2025-12-26부터 현재까지)
-function generateFridays(): string[] {
+// 금요일 날짜 생성 함수 (2025-12-26부터 현재까지 + 기록이 있는 미래 날짜)
+function generateFridays(recordDates: string[] = []): string[] {
   const fridays: string[] = [];
   const startDate = new Date('2025-12-26');
   const today = new Date();
@@ -20,7 +20,16 @@ function generateFridays(): string[] {
     current.setDate(current.getDate() + 7);
   }
 
-  return fridays.reverse(); // 최신순
+  // 기록이 있는 미래 날짜 추가
+  const fridaySet = new Set(fridays);
+  recordDates.forEach((date) => {
+    if (!fridaySet.has(date)) {
+      fridays.push(date);
+    }
+  });
+
+  // 날짜 기준 내림차순 정렬 (최신순)
+  return fridays.sort((a, b) => b.localeCompare(a));
 }
 
 // 날짜 포맷 함수
@@ -50,7 +59,10 @@ export default function HistoryPage() {
   const [originalMemberNames, setOriginalMemberNames] = useState<string[]>([]);
   const [reviewInputs, setReviewInputs] = useState<Record<string, { author: string; content: string }>>({});
 
-  const fridays = useMemo(() => generateFridays(), []);
+  const fridays = useMemo(() => {
+    const recordDates = records.map((r) => r.date);
+    return generateFridays(recordDates);
+  }, [records]);
 
   const handleAdminAuth = () => {
     setIsAdmin(true);
@@ -180,9 +192,17 @@ export default function HistoryPage() {
 
       {isAdmin && (
         <div className="text-center">
-          <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-            관리자 모드 활성화
-          </span>
+          <div className="inline-flex items-center gap-2">
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              관리자 모드 활성화
+            </span>
+            <button
+              onClick={() => setIsAdmin(false)}
+              className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm hover:bg-gray-200 transition-colors"
+            >
+              종료
+            </button>
+          </div>
         </div>
       )}
 
