@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Member, Round } from '@/types';
 import { useHistory } from '@/hooks/useHistory';
 import { useSettings } from '@/hooks/useSettings';
@@ -43,43 +43,19 @@ interface ResultDisplayProps {
   members: Member[];
 }
 
-// 금요일 날짜 생성 함수 (최근 4주 + 앞으로 2개 금요일)
-function generateFridays(): string[] {
-  const fridays: string[] = [];
+// 가장 가까운 목요일 날짜를 YYYY-MM-DD 형식으로 반환
+function getClosestThursday(): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  // 4주 전부터
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - 28);
-
-  // 가장 가까운 금요일 찾기
-  while (startDate.getDay() !== 5) {
-    startDate.setDate(startDate.getDate() + 1);
-  }
-
-  // 오늘까지의 금요일 추가
-  let current = new Date(startDate);
-  while (current <= today) {
-    const year = current.getFullYear();
-    const month = String(current.getMonth() + 1).padStart(2, '0');
-    const day = String(current.getDate()).padStart(2, '0');
-    fridays.push(`${year}-${month}-${day}`);
-    current.setDate(current.getDate() + 7);
-  }
-
-  // 미래 금요일 2개 추가
-  let futureFridayCount = 0;
-  while (futureFridayCount < 2) {
-    const year = current.getFullYear();
-    const month = String(current.getMonth() + 1).padStart(2, '0');
-    const day = String(current.getDate()).padStart(2, '0');
-    fridays.push(`${year}-${month}-${day}`);
-    current.setDate(current.getDate() + 7);
-    futureFridayCount++;
-  }
-
-  return fridays;
+  const day = today.getDay(); // 0=일, 1=월, ..., 4=목, ...
+  const diff = (4 - day + 7) % 7; // 이번 주 목요일까지 남은 일수
+  // 오늘이 목요일 이후(금,토,일)면 다음 주 목요일, 아니면 이번 주 목요일
+  const thursday = new Date(today);
+  thursday.setDate(today.getDate() + (diff === 0 ? 0 : diff));
+  const year = thursday.getFullYear();
+  const month = String(thursday.getMonth() + 1).padStart(2, '0');
+  const d = String(thursday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${d}`;
 }
 
 // 날짜 포맷 함수
@@ -102,7 +78,7 @@ export default function ResultDisplay({ round, members }: ResultDisplayProps) {
   const [saveNote, setSaveNote] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const fridays = useMemo(() => generateFridays(), []);
+  const defaultDate = getClosestThursday();
 
   // 멤버 ID로 이름 찾기
   const getMemberName = (memberId: string) => {
@@ -119,10 +95,8 @@ export default function ResultDisplay({ round, members }: ResultDisplayProps) {
   };
 
   const openSaveModal = (type: 'thisWeek' | 'nextWeek') => {
-    // 기본 날짜 설정 (가장 가까운 금요일)
-    const todayStr = today.toISOString().split('T')[0];
-    const closestFriday = fridays.find((f) => f >= todayStr) || fridays[fridays.length - 1];
-    setSelectedDate(closestFriday);
+    // 기본 날짜 설정 (가장 가까운 목요일)
+    setSelectedDate(defaultDate);
     setSaveNote('');
     setShowSaveModal(type);
   };
@@ -354,20 +328,17 @@ export default function ResultDisplay({ round, members }: ResultDisplayProps) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 저장할 날짜 선택
               </label>
-              <select
+              <input
+                type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-              >
-                {fridays.map((date) => {
-                  const existing = getRecordByDate(date);
-                  return (
-                    <option key={date} value={date}>
-                      {formatDateKorean(date)} {existing ? '(기록 있음)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
+              />
+              {selectedDate && getRecordByDate(selectedDate) && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠️ {formatDateKorean(selectedDate)}에 이미 기록이 있습니다
+                </p>
+              )}
             </div>
 
             {/* 메모 입력 */}
