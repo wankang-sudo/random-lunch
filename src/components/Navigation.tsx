@@ -9,6 +9,7 @@ const navItems = [
   { href: '/restaurants', label: '식당모음', icon: '🍽️' },
   { href: '/score', label: '스코어', icon: '🏆' },
   { href: '/bestfriend', label: '찐친', icon: '👯' },
+  { href: '/closer', label: '친해지길바라', icon: '🌱' },
   { href: '/settings', label: '설정', icon: '⚙️' },
 ];
 
