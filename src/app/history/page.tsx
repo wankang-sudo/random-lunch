@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { ref, onValue, set } from 'firebase/database';
+import { getDb } from '@/lib/firebase';
 import { useHistory } from '@/hooks/useHistory';
 import { useSettings } from '@/hooks/useSettings';
 import AdminPasswordModal from '@/components/AdminPasswordModal';
 
-// 금요일 날짜 생성 함수 (2025-12-26부터 현재까지 + 기록이 있는 미래 날짜)
-function generateFridays(recordDates: string[] = []): string[] {
-  const fridays: string[] = [];
-  const startDate = new Date('2025-12-26');
+// 목요일 날짜 생성 함수 (2025-12-25부터 현재까지 + 기록이 있는 미래 날짜)
+function generateThursdays(recordDates: string[] = []): string[] {
+  const thursdays: string[] = [];
+  const startDate = new Date('2025-12-25');
   const today = new Date();
 
   let current = new Date(startDate);
@@ -16,20 +18,20 @@ function generateFridays(recordDates: string[] = []): string[] {
     const year = current.getFullYear();
     const month = String(current.getMonth() + 1).padStart(2, '0');
     const day = String(current.getDate()).padStart(2, '0');
-    fridays.push(`${year}-${month}-${day}`);
+    thursdays.push(`${year}-${month}-${day}`);
     current.setDate(current.getDate() + 7);
   }
 
   // 기록이 있는 미래 날짜 추가
-  const fridaySet = new Set(fridays);
+  const thursdaySet = new Set(thursdays);
   recordDates.forEach((date) => {
-    if (!fridaySet.has(date)) {
-      fridays.push(date);
+    if (!thursdaySet.has(date)) {
+      thursdays.push(date);
     }
   });
 
   // 날짜 기준 내림차순 정렬 (최신순)
-  return fridays.sort((a, b) => b.localeCompare(a));
+  return thursdays.sort((a, b) => b.localeCompare(a));
 }
 
 // 날짜 포맷 함수
@@ -58,11 +60,38 @@ export default function HistoryPage() {
   });
   const [originalMemberNames, setOriginalMemberNames] = useState<string[]>([]);
   const [reviewInputs, setReviewInputs] = useState<Record<string, { author: string; content: string }>>({});
+  const [hiddenDates, setHiddenDates] = useState<string[]>([]);
 
-  const fridays = useMemo(() => {
+  useEffect(() => {
+    const db = getDb();
+    if (!db) return;
+
+    const hiddenRef = ref(db, 'settings/hiddenDates');
+    return onValue(hiddenRef, (snapshot) => {
+      const data = snapshot.val();
+      if (Array.isArray(data)) {
+        setHiddenDates(data.filter((d): d is string => typeof d === 'string'));
+      } else if (data && typeof data === 'object') {
+        setHiddenDates(Object.values(data).filter((d): d is string => typeof d === 'string'));
+      } else {
+        setHiddenDates([]);
+      }
+    });
+  }, []);
+
+  const thursdays = useMemo(() => {
     const recordDates = records.map((r) => r.date);
-    return generateFridays(recordDates);
-  }, [records]);
+    const hiddenSet = new Set(hiddenDates);
+    return generateThursdays(recordDates).filter((date) => !hiddenSet.has(date));
+  }, [records, hiddenDates]);
+
+  const hideDate = async (date: string) => {
+    const db = getDb();
+    if (!db) return;
+
+    const updated = hiddenDates.includes(date) ? hiddenDates : [...hiddenDates, date];
+    await set(ref(db, 'settings/hiddenDates'), updated);
+  };
 
   const handleAdminAuth = () => {
     setIsAdmin(true);
@@ -157,9 +186,17 @@ export default function HistoryPage() {
 
   const handleDelete = async (date: string) => {
     const record = getRecordByDate(date);
-    if (record && confirm('이 기록을 삭제하시겠습니까?')) {
+
+    if (record) {
+      if (!confirm('이 기록을 삭제하시겠습니까?')) return;
       await deleteRecord(record.id);
+    } else {
+      if (!confirm('이 날짜의 기록창을 삭제하시겠습니까?')) return;
+      await hideDate(date);
     }
+
+    setEditingDate(null);
+    setOriginalMemberNames([]);
   };
 
   if (loading) {
@@ -175,7 +212,7 @@ export default function HistoryPage() {
       {/* 타이틀 */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-800">📅 추첨 기록</h2>
-        <p className="text-gray-600 mt-1">매주 금요일 점심 조 기록</p>
+        <p className="text-gray-600 mt-1">매주 목요일 점심 조 기록</p>
       </div>
 
       {/* 관리자 버튼 */}
@@ -212,7 +249,7 @@ export default function HistoryPage() {
         <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
 
         <div className="space-y-4">
-          {fridays.map((date) => {
+          {thursdays.map((date) => {
             const record = getRecordByDate(date);
             const isEditing = editingDate === date;
 
@@ -236,17 +273,25 @@ export default function HistoryPage() {
                   }`}
                 >
                   {/* 날짜 */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`font-medium ${record?.isWinner ? 'text-blue-700' : 'text-gray-700'}`}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className={`font-medium min-w-0 ${record?.isWinner ? 'text-blue-700' : 'text-gray-700'}`}>
                       {formatDate(date)}
                     </span>
                     {isAdmin && !isEditing && (
-                      <button
-                        onClick={() => handleEdit(date)}
-                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-                      >
-                        편집
-                      </button>
+                      <div className="flex flex-shrink-0 gap-1">
+                        <button
+                          onClick={() => handleEdit(date)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          편집
+                        </button>
+                        <button
+                          onClick={() => handleDelete(date)}
+                          className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                        >
+                          삭제
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -310,14 +355,12 @@ export default function HistoryPage() {
                         >
                           취소
                         </button>
-                        {record && (
-                          <button
-                            onClick={() => handleDelete(date)}
-                            className="py-2 px-3 bg-red-100 text-red-600 rounded-lg text-sm hover:bg-red-200 transition-colors"
-                          >
-                            삭제
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleDelete(date)}
+                          className="py-2 px-3 bg-red-100 text-red-600 rounded-lg text-sm hover:bg-red-200 transition-colors"
+                        >
+                          삭제
+                        </button>
                         <button
                           onClick={handleSave}
                           className="flex-1 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
