@@ -46,6 +46,25 @@ export default function NumberSelector({
           {' → '}
           다음 주: <span className="font-semibold">{participantCount - round.drawCount}명</span>
         </p>
+
+        {/* 당첨조 보상 카드 */}
+        <div className="mt-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+          <p className="text-sm font-bold text-blue-600 mb-3">🎁 당첨조 보상</p>
+          <ul className="text-sm text-gray-700 space-y-2">
+            <li className="flex items-center gap-2">
+              <span className="text-lg">💳</span>
+              <span>인당 15,000원 내 법카 사용</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-lg">⏰</span>
+              <span>점심시간 1.5시간</span>
+            </li>
+            <li className="flex items-center gap-2 text-blue-600 font-bold bg-blue-100 -mx-2 px-2 py-1.5 rounded-lg">
+              <span className="text-lg">🎁</span>
+              <span>당첨 혜택 인당 5,000원 추가</span>
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* 선택 현황 */}

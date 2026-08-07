@@ -9,6 +9,8 @@ import { useStatistics } from '@/hooks/useStatistics';
 import { useSettings } from '@/hooks/useSettings';
 import AdminPasswordModal from '@/components/AdminPasswordModal';
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 export default function SettingsPage() {
   const { members, loading: membersLoading, addMember, updateMember, deleteMember } = useMembers();
   const { round, createRound, resetRound } = useCurrentRound();
@@ -42,6 +44,11 @@ export default function SettingsPage() {
 
   // 과거 데이터 초기화
   const handleInitializeHistory = async () => {
+    if (IS_PRODUCTION) {
+      alert('운영 환경에서는 과거 데이터를 초기화할 수 없습니다.');
+      return;
+    }
+
     // 먼저 멤버 매칭 확인
     const requiredNames = ['고희진', '김수진', '이규희', '강봉수', '김민주', '최성학', '권태욱', '강완', '윤선빈'];
     const missingNames = requiredNames.filter((name) => !getMemberIdByName(name));
@@ -66,7 +73,7 @@ export default function SettingsPage() {
       await remove(ref(db, 'statistics/memberScores'));
       await remove(ref(db, 'statistics/pairCounts'));
 
-      // 2. 과거 기록 데이터
+      // 2. 과거 기록 데이터 (사용자가 실제로 진행한 이력 기준)
       const historicalData = [
         {
           date: '2025-12-26',
@@ -94,14 +101,38 @@ export default function SettingsPage() {
         },
         {
           date: '2026-01-23',
-          memberNames: ['최성학', '윤선빈', '김수진', '권태욱'],
+          memberNames: ['권태욱', '김수진', '윤선빈', '최성학'],
           note: '',
           isWinner: true,
         },
         {
           date: '2026-01-30',
-          memberNames: ['강완', '고희진', '강봉수', '이규희', '김민주'],
+          memberNames: [],
+          note: '전체 회식으로 랜덤 런치 건너뜀',
+          isWinner: false,
+        },
+        {
+          date: '2026-02-06',
+          memberNames: ['강완', '강봉수', '김민주', '고희진', '이규희'],
           note: '',
+          isWinner: false,
+        },
+        {
+          date: '2026-02-13',
+          memberNames: ['이규희', '김수진', '권태욱', '고희진'],
+          note: '',
+          isWinner: true,
+        },
+        {
+          date: '2026-02-20',
+          memberNames: ['윤선빈', '강완', '강봉수', '김민주', '최성학'],
+          note: '',
+          isWinner: false,
+        },
+        {
+          date: '2026-02-27',
+          memberNames: [],
+          note: '전체 회식으로 랜덤 런치 건너뜀',
           isWinner: false,
         },
       ];
@@ -133,17 +164,21 @@ export default function SettingsPage() {
       });
       await set(ref(db, 'statistics/memberScores'), memberScores);
 
-      // 5. 찐친 페어 카운트 계산 (모든 그룹 - 깍두기 포함)
+      // 5. 찐친 페어 카운트 계산 (모든 그룹 - 깍두기 포함, 전체 회식/건너뜀 날짜 제외)
       const pairCounts: Record<string, number> = {};
 
       // 찐친 카운트에 포함할 그룹 (깍두기 포함)
       const pairGroups = [
-        ['고희진', '김수진', '이규희', '강봉수'], // 12/26
+        ['고희진', '김수진', '이규희', '강봉수'], // 12/26 (당첨조)
         // 1/2 skip (전체 회식)
-        ['김민주', '최성학', '이규희', '김수진'], // 1/9
-        ['강봉수', '고희진', '권태욱', '강완', '윤선빈', '김민주'], // 1/16 (깍두기 포함)
-        ['최성학', '윤선빈', '김수진', '권태욱'], // 1/23
-        ['강완', '고희진', '강봉수', '이규희', '김민주'], // 1/30
+        ['김민주', '최성학', '이규희', '김수진'], // 1/9 (당첨조)
+        ['강봉수', '고희진', '권태욱', '강완', '윤선빈', '김민주'], // 1/16 (깍두기 포함, 비당첨조)
+        ['권태욱', '김수진', '윤선빈', '최성학'], // 1/23 (당첨조)
+        // 1/30 skip (전체 회식)
+        ['강완', '강봉수', '김민주', '고희진', '이규희'], // 2/6 (비당첨조)
+        ['이규희', '김수진', '권태욱', '고희진'], // 2/13 (당첨조)
+        ['윤선빈', '강완', '강봉수', '김민주', '최성학'], // 2/20 (비당첨조)
+        // 2/27 skip (전체 회식)
       ];
 
       pairGroups.forEach((group) => {
@@ -567,79 +602,81 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* 데이터 초기화 */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-red-100">
-        <h3 className="font-bold text-gray-800 mb-4">📊 과거 데이터 초기화</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          기록, 스코어, 찐친 데이터를 미리 정의된 과거 데이터로 초기화합니다.
-        </p>
+      {/* 데이터 초기화 (개발 환경에서만 표시) */}
+      {!IS_PRODUCTION && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-red-100">
+          <h3 className="font-bold text-gray-800 mb-4">📊 과거 데이터 초기화</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            기록, 스코어, 찐친 데이터를 미리 정의된 과거 데이터로 초기화합니다.
+          </p>
 
-        {showInitModal ? (
-          <div className="space-y-4">
-            {/* 현재 등록된 멤버 */}
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-800 font-medium mb-2">현재 등록된 멤버:</p>
-              <p className="text-xs text-blue-700">
-                {members.map((m) => m.name).join(', ') || '없음'}
-              </p>
-            </div>
+          {showInitModal ? (
+            <div className="space-y-4">
+              {/* 현재 등록된 멤버 */}
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800 font-medium mb-2">현재 등록된 멤버:</p>
+                <p className="text-xs text-blue-700">
+                  {members.map((m) => m.name).join(', ') || '없음'}
+                </p>
+              </div>
 
-            {/* 필요한 멤버 체크 */}
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-800 font-medium mb-2">필요한 멤버 (9명):</p>
-              <div className="flex flex-wrap gap-1">
-                {['고희진', '김수진', '이규희', '강봉수', '김민주', '최성학', '권태욱', '강완', '윤선빈'].map((name) => {
-                  const found = !!getMemberIdByName(name);
-                  return (
-                    <span
-                      key={name}
-                      className={`px-2 py-0.5 rounded text-xs ${
-                        found ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {name} {found ? '✓' : '✗'}
-                    </span>
-                  );
-                })}
+              {/* 필요한 멤버 체크 */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-800 font-medium mb-2">필요한 멤버 (9명):</p>
+                <div className="flex flex-wrap gap-1">
+                  {['고희진', '김수진', '이규희', '강봉수', '김민주', '최성학', '권태욱', '강완', '윤선빈'].map((name) => {
+                    const found = !!getMemberIdByName(name);
+                    return (
+                      <span
+                        key={name}
+                        className={`px-2 py-0.5 rounded text-xs ${
+                          found ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {name} {found ? '✓' : '✗'}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-800 font-medium mb-2">⚠️ 초기화할 데이터:</p>
+                <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
+                  <li>12/26 당첨: 고희진, 김수진, 이규희, 강봉수</li>
+                  <li>1/2 미당첨: (전체 회식)</li>
+                  <li>1/9 당첨: 김민주, 최성학, 이규희, 김수진</li>
+                  <li>1/16 미당첨: 강봉수, 고희진, 권태욱, 강완 (+깍두기: 윤선빈, 김민주)</li>
+                  <li>1/23 당첨: 최성학, 윤선빈, 김수진, 권태욱</li>
+                  <li>1/30 미당첨: 강완, 고희진, 강봉수, 이규희, 김민주</li>
+                </ul>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowInitModal(false)}
+                  className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleInitializeHistory}
+                  disabled={initializing}
+                  className="flex-1 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors disabled:bg-gray-300"
+                >
+                  {initializing ? '초기화 중...' : '초기화 실행'}
+                </button>
               </div>
             </div>
-
-            <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="text-sm text-yellow-800 font-medium mb-2">⚠️ 초기화할 데이터:</p>
-              <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
-                <li>12/26 당첨: 고희진, 김수진, 이규희, 강봉수</li>
-                <li>1/2 미당첨: (전체 회식)</li>
-                <li>1/9 당첨: 김민주, 최성학, 이규희, 김수진</li>
-                <li>1/16 미당첨: 강봉수, 고희진, 권태욱, 강완 (+깍두기: 윤선빈, 김민주)</li>
-                <li>1/23 당첨: 최성학, 윤선빈, 김수진, 권태욱</li>
-                <li>1/30 미당첨: 강완, 고희진, 강봉수, 이규희, 김민주</li>
-              </ul>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowInitModal(false)}
-                className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleInitializeHistory}
-                disabled={initializing}
-                className="flex-1 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors disabled:bg-gray-300"
-              >
-                {initializing ? '초기화 중...' : '초기화 실행'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowInitModal(true)}
-            className="w-full py-3 bg-red-100 text-red-700 rounded-xl font-medium hover:bg-red-200 transition-colors"
-          >
-            과거 데이터 초기화
-          </button>
-        )}
-      </div>
+          ) : (
+            <button
+              onClick={() => setShowInitModal(true)}
+              className="w-full py-3 bg-red-100 text-red-700 rounded-xl font-medium hover:bg-red-200 transition-colors"
+            >
+              과거 데이터 초기화
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 비밀번호 모달 */}
       <AdminPasswordModal
